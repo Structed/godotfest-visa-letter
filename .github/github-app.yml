@@ -1,0 +1,55 @@
+# Repository configuration for the GitHub Copilot app.
+# Reference: https://docs.github.com/copilot/reference/github-copilot-app-reference/repository-configuration
+
+instructions: |
+  This is a standalone Blazor WebAssembly app (.NET 10) that generates Schengen visa
+  invitation letters for GodotFest attendees, as Markdown and as PDF. Read README.md before
+  making changes; the constraints below are not stylistic preferences.
+
+  - There is no backend and there must never be one. The tool handles passport numbers and
+    home addresses, and they stay in browser memory for the session only. Do not add network
+    calls, telemetry, analytics, server-side rendering or any form of persistence.
+  - Company and event facts are compile-time constants in `Models/EventFacts.cs`. They are
+    deliberately not form fields: a typo in a register number on a document addressed to a
+    consulate is a serious problem.
+  - Markdown and PDF must both derive from `LetterComposer` -> `LetterBlock[]`, so the two
+    outputs cannot drift apart. Never render one of them independently.
+  - Do not soften the cost clause, or the statement that the letter is explicitly not a
+    Verpflichtungserklaerung under paragraphs 66-68 AufenthG. That wording keeps liability off
+    the UG. Changing it needs Senad's sign-off.
+  - `InvariantGlobalization` is enabled and month names are hardcoded in `LetterDates`. Do not
+    introduce `CultureInfo`-dependent formatting.
+  - pdfmake and its Roboto fonts are vendored under `wwwroot/lib/pdfmake/` so the tool works
+    offline. Do not switch to a CDN, and do not replace real PDF text with an html2canvas
+    rasterisation.
+  - Keep generated filenames aligned with `Scripts\New-VisaInvitationLetter.ps1` in the
+    OneDrive workspace, so letters from either route sit together consistently.
+  - Verify changes with `dotnet build`. Prefer .NET and PowerShell tooling.
+
+scripts:
+  - name: Setup
+    command: dotnet restore
+    triggers:
+      - session.create
+
+  # --no-launch-profile stops Properties/launchSettings.json from opening a second, external
+  # browser on top of the app's integrated one. --urls restores the port that profile used, so
+  # the URL stays the same as a manual `dotnet run`.
+  - name: Run
+    command: dotnet run --no-launch-profile --urls http://localhost:5279
+
+  - name: Build
+    command: dotnet build
+
+  - name: Publish
+    command: dotnet publish -c Release -o dist
+
+# Kestrel prints: Now listening on: http://localhost:5279
+server_ready_pattern: '(?i)Now listening on:\s+(https?://\S+)'
+auto_open_in_browser: true
+
+automation:
+  auto_issue_session: true
+  # Left off deliberately: this repository is about handling passport and address data, so
+  # sessions should not be drivable from the web or mobile without a conscious opt-in.
+  remote_control: false
