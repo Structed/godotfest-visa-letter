@@ -1,0 +1,356 @@
+@page "/"
+@using GodotFest.VisaLetter.Letters
+@using GodotFest.VisaLetter.Models
+@using GodotFest.VisaLetter.Services
+@inject BrowserFiles Files
+
+<PageTitle>GodotFest — Visa Invitation Letter</PageTitle>
+
+<header class="masthead">
+    <div>
+        <h1>Visa Invitation Letter</h1>
+        <p class="lede">
+            Generates the Schengen invitation letter for a <strong>GodotFest 2026</strong> attendee,
+            as Markdown and as a print-ready PDF.
+        </p>
+    </div>
+    <div class="privacy" role="note">
+        <strong>Nothing leaves this browser.</strong>
+        Passport details are held in memory only — there is no server, no upload, and nothing is stored.
+        Closing the tab discards everything.
+    </div>
+</header>
+
+<EditForm EditContext="editContext" FormName="visaLetter">
+    <DataAnnotationsValidator />
+
+    <div class="workspace">
+        <section class="form-pane">
+
+            <fieldset>
+                <legend>Person invited</legend>
+
+                <div class="field">
+                    <label for="fullName">Full name <span class="hint">exactly as in the passport</span></label>
+                    <InputText id="fullName" class="form-control" @bind-Value="data.FullName" placeholder="Ada Lovelace" />
+                    <ValidationMessage For="() => data.FullName" />
+                </div>
+
+                <div class="row-2">
+                    <div class="field">
+                        <label for="dob">Date of birth</label>
+                        <InputDate id="dob" TValue="DateOnly?" class="form-control" @bind-Value="data.DateOfBirth" />
+                        <ValidationMessage For="() => data.DateOfBirth" />
+                    </div>
+                    <div class="field">
+                        <label for="nationality">Nationality</label>
+                        <InputText id="nationality" class="form-control" @bind-Value="data.Nationality" placeholder="British" />
+                        <ValidationMessage For="() => data.Nationality" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="pob">Place and country of birth</label>
+                    <InputText id="pob" class="form-control" @bind-Value="data.PlaceOfBirth" placeholder="London, United Kingdom" />
+                    <ValidationMessage For="() => data.PlaceOfBirth" />
+                </div>
+
+                <div class="field">
+                    <label for="home">Residential address</label>
+                    <InputTextArea id="home" class="form-control" rows="2" @bind-Value="data.HomeAddress"
+                                   placeholder="12 Analytical Way&#10;London W1A 1AA, United Kingdom" />
+                    <ValidationMessage For="() => data.HomeAddress" />
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Passport</legend>
+
+                <div class="field">
+                    <label for="passport">Passport number</label>
+                    <InputText id="passport" class="form-control" @bind-Value="data.PassportNumber" placeholder="123456789" />
+                    <ValidationMessage For="() => data.PassportNumber" />
+                </div>
+
+                <div class="row-2">
+                    <div class="field">
+                        <label for="issued">Issued on</label>
+                        <InputDate id="issued" TValue="DateOnly?" class="form-control" @bind-Value="data.PassportIssueDate" />
+                        <ValidationMessage For="() => data.PassportIssueDate" />
+                    </div>
+                    <div class="field">
+                        <label for="expires">Valid until</label>
+                        <InputDate id="expires" TValue="DateOnly?" class="form-control" @bind-Value="data.PassportExpiryDate" />
+                        <ValidationMessage For="() => data.PassportExpiryDate" />
+                    </div>
+                </div>
+
+                @if (data.PassportExpiresTooSoon)
+                {
+                    <p class="warn">
+                        This passport expires before
+                        <strong>@LetterDates.Format(EventFacts.PassportValidUntilAtLeast, LetterLanguage.English)</strong>.
+                        Schengen rules require validity of at least three months beyond the
+                        @LetterDates.Format(EventFacts.Departure, LetterLanguage.English) departure date.
+                        The letter will still generate, but the application is likely to be refused.
+                    </p>
+                }
+            </fieldset>
+
+            <fieldset>
+                <legend>Employment and attendance</legend>
+
+                <div class="row-2">
+                    <div class="field">
+                        <label for="employer">Employer</label>
+                        <InputText id="employer" class="form-control" @bind-Value="data.Employer" placeholder="Analytical Engines Ltd." />
+                        <ValidationMessage For="() => data.Employer" />
+                    </div>
+                    <div class="field">
+                        <label for="job">Job title</label>
+                        <InputText id="job" class="form-control" @bind-Value="data.JobTitle" placeholder="Lead Engineer" />
+                        <ValidationMessage For="() => data.JobTitle" />
+                    </div>
+                </div>
+
+                <div class="row-2">
+                    <div class="field">
+                        <label for="role">Attending as</label>
+                        <InputSelect id="role" class="form-select" @bind-Value="data.Role">
+                            <option value="@AttendeeRoleKind.Attendee">Conference attendee</option>
+                            <option value="@AttendeeRoleKind.Speaker">Speaker</option>
+                            <option value="@AttendeeRoleKind.SponsorRepresentative">Sponsor representative</option>
+                        </InputSelect>
+                    </div>
+                    <div class="field">
+                        <label for="ticket">Booking reference <span class="hint">from Pretix</span></label>
+                        <InputText id="ticket" class="form-control" @bind-Value="data.TicketOrderId" placeholder="GF26-ABCDE" />
+                        <ValidationMessage For="() => data.TicketOrderId" />
+                    </div>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Receiving embassy or consulate</legend>
+
+                <div class="field">
+                    <label for="mission">Name of the mission</label>
+                    <InputText id="mission" class="form-control" @bind-Value="data.MissionName" placeholder="German Embassy London" />
+                    <ValidationMessage For="() => data.MissionName" />
+                </div>
+
+                <div class="field">
+                    <label for="missionAddr">Address of the mission</label>
+                    <InputTextArea id="missionAddr" class="form-control" rows="2" @bind-Value="data.MissionAddress"
+                                   placeholder="23 Belgrave Square&#10;London SW1X 8PZ, United Kingdom" />
+                    <ValidationMessage For="() => data.MissionAddress" />
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Letter</legend>
+
+                <div class="row-2">
+                    <div class="field">
+                        <label for="letterDate">Letter date</label>
+                        <InputDate id="letterDate" TValue="DateOnly?" class="form-control" @bind-Value="data.LetterDate" />
+                        <ValidationMessage For="() => data.LetterDate" />
+                    </div>
+                    <div class="field">
+                        <label>Language</label>
+                        <InputRadioGroup @bind-Value="data.Output" @bind-Value:after="SyncPreviewLanguage">
+                            <div class="choices">
+                                <label class="choice"><InputRadio Value="LetterOutputLanguage.English" /> English</label>
+                                <label class="choice"><InputRadio Value="LetterOutputLanguage.German" /> German</label>
+                                <label class="choice"><InputRadio Value="LetterOutputLanguage.Both" /> Both</label>
+                            </div>
+                        </InputRadioGroup>
+                    </div>
+                </div>
+
+                @if (data.Output is LetterOutputLanguage.English or LetterOutputLanguage.Both)
+                {
+                    <div class="field">
+                        <label for="accEn">Accommodation <span class="hint">English</span></label>
+                        <InputText id="accEn" class="form-control" @bind-Value="data.AccommodationEn" />
+                    </div>
+                }
+
+                @if (data.Output is LetterOutputLanguage.German or LetterOutputLanguage.Both)
+                {
+                    <div class="field">
+                        <label for="accDe">Accommodation <span class="hint">German</span></label>
+                        <InputText id="accDe" class="form-control" @bind-Value="data.AccommodationDe" />
+                    </div>
+                }
+            </fieldset>
+
+            <div class="actions">
+                <button type="button" class="btn primary" @onclick="DownloadPdfAsync">Download PDF</button>
+                <button type="button" class="btn outline" @onclick="DownloadMarkdownAsync">Download Markdown</button>
+                <button type="button" class="btn outline" @onclick="PreviewPdfAsync">Open PDF preview</button>
+                <button type="button" class="btn ghost" @onclick="CopyMarkdownAsync">Copy Markdown</button>
+                <button type="button" class="btn ghost danger" @onclick="Reset">Clear form</button>
+            </div>
+
+            @if (!string.IsNullOrEmpty(status))
+            {
+                <p class="status @statusKind">@status</p>
+            }
+
+            <p class="footnote">
+                Print the PDF, have Senad sign and stamp it, then send it with the current
+                Handelsregister extract, the ticket confirmation, and a copy of the passport data page.
+                The letter states that the attendee bears all costs and is explicitly not a
+                Verpflichtungserklärung under §§ 66–68 AufenthG.
+            </p>
+        </section>
+
+        <section class="preview-pane">
+            <div class="preview-head">
+                <h2>Preview</h2>
+                @if (data.Output == LetterOutputLanguage.Both)
+                {
+                    <div class="tabs">
+                        <button type="button" class="tab @(previewLanguage == LetterLanguage.English ? "on" : "")"
+                                @onclick="() => previewLanguage = LetterLanguage.English">English</button>
+                        <button type="button" class="tab @(previewLanguage == LetterLanguage.German ? "on" : "")"
+                                @onclick="() => previewLanguage = LetterLanguage.German">German</button>
+                    </div>
+                }
+            </div>
+            <pre class="preview">@PreviewMarkdown</pre>
+        </section>
+    </div>
+</EditForm>
+
+@code {
+    private readonly LetterData data = new();
+    private EditContext editContext = default!;
+    private LetterLanguage previewLanguage = LetterLanguage.English;
+    private string status = string.Empty;
+    private string statusKind = "ok";
+
+    protected override void OnInitialized() => editContext = new EditContext(data);
+
+    private string PreviewMarkdown =>
+        MarkdownRenderer.Render(LetterComposer.Compose(data, previewLanguage));
+
+    private void SyncPreviewLanguage() => previewLanguage = data.Output switch
+    {
+        LetterOutputLanguage.German => LetterLanguage.German,
+        LetterOutputLanguage.English => LetterLanguage.English,
+        _ => previewLanguage
+    };
+
+    private LetterLanguage[] TargetLanguages => data.Output switch
+    {
+        LetterOutputLanguage.English => [LetterLanguage.English],
+        LetterOutputLanguage.German => [LetterLanguage.German],
+        _ => [LetterLanguage.English, LetterLanguage.German]
+    };
+
+    private bool Ready()
+    {
+        if (editContext.Validate())
+        {
+            return true;
+        }
+
+        Report("Some required details are still missing — check the highlighted fields.", "bad");
+        return false;
+    }
+
+    private void Report(string message, string kind = "ok")
+    {
+        status = message;
+        statusKind = kind;
+    }
+
+    private async Task DownloadMarkdownAsync()
+    {
+        if (!Ready())
+        {
+            return;
+        }
+
+        var files = TargetLanguages
+            .Select(language => (
+                Name: $"{data.FileBaseName(language)}.md",
+                Content: System.Text.Encoding.UTF8.GetBytes(
+                    MarkdownRenderer.Render(LetterComposer.Compose(data, language)))))
+            .ToList();
+
+        if (files.Count == 1)
+        {
+            await Files.DownloadMarkdownAsync(
+                files[0].Name, System.Text.Encoding.UTF8.GetString(files[0].Content));
+            Report("Markdown saved.");
+            return;
+        }
+
+        await Files.DownloadZipAsync($"{ArchiveBaseName}-markdown.zip", ZipBuilder.ToBase64(files));
+        Report($"Markdown saved as a zip ({files.Count} files).");
+    }
+
+    private async Task DownloadPdfAsync()
+    {
+        if (!Ready())
+        {
+            return;
+        }
+
+        Report("Building the PDF…");
+
+        var languages = TargetLanguages;
+
+        if (languages.Length == 1)
+        {
+            var json = PdfDocumentFactory.BuildJson(
+                LetterComposer.Compose(data, languages[0]), languages[0]);
+            await Files.DownloadPdfAsync($"{data.FileBaseName(languages[0])}.pdf", json);
+            Report("PDF saved.");
+            return;
+        }
+
+        var files = new List<(string Name, byte[] Content)>();
+
+        foreach (var language in languages)
+        {
+            var json = PdfDocumentFactory.BuildJson(LetterComposer.Compose(data, language), language);
+            var base64 = await Files.PdfBase64Async(json);
+            files.Add(($"{data.FileBaseName(language)}.pdf", Convert.FromBase64String(base64)));
+        }
+
+        await Files.DownloadZipAsync($"{ArchiveBaseName}-pdf.zip", ZipBuilder.ToBase64(files));
+        Report($"PDF saved as a zip ({files.Count} files).");
+    }
+
+    private async Task PreviewPdfAsync()
+    {
+        var json = PdfDocumentFactory.BuildJson(LetterComposer.Compose(data, previewLanguage), previewLanguage);
+        await Files.OpenPdfAsync(json);
+        Report("PDF opened in a new tab. Any unfilled field shows as {{PLACEHOLDER}}.");
+    }
+
+    private async Task CopyMarkdownAsync()
+    {
+        var copied = await Files.CopyAsync(PreviewMarkdown);
+        Report(copied ? "Markdown copied to the clipboard." : "The browser blocked clipboard access.",
+            copied ? "ok" : "bad");
+    }
+
+    private void Reset()
+    {
+        data.FullName = data.PlaceOfBirth = data.Nationality = data.PassportNumber = string.Empty;
+        data.HomeAddress = data.Employer = data.JobTitle = data.TicketOrderId = string.Empty;
+        data.MissionName = data.MissionAddress = string.Empty;
+        data.DateOfBirth = data.PassportIssueDate = data.PassportExpiryDate = null;
+        data.LetterDate = DateOnly.FromDateTime(DateTime.Today);
+        data.Role = AttendeeRoleKind.Attendee;
+        editContext = new EditContext(data);
+        Report("Form cleared.");
+    }
+
+    private string ArchiveBaseName => data.FileBaseName(LetterLanguage.English);
+}
