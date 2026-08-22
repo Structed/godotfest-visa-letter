@@ -3,16 +3,19 @@ name: Build and deploy
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
+# One production deployment at a time: queued runs collapse to the latest, but a deploy that
+# is already under way is allowed to finish. Pull request builds are per-ref and supersede
+# each other, and never reach the deploy job.
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: pages-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -27,34 +30,32 @@ jobs:
       - name: Publish
         run: dotnet publish -c Release -o dist
 
+      # A project Pages site is served from /<repo>/, not /. If this rewrite silently missed,
+      # the deployed site would ask for its framework files at the domain root and never
+      # boot, so the grep turns that into a build failure rather than a broken deployment.
       - name: Point base href at the project page
         run: |
-          sed -i 's|<base href="/" />|<base href="/${{ github.event.repository.name }}/" />|g' \
-            dist/wwwroot/index.html
+          base="/${GITHUB_REPOSITORY#*/}/"
+          sed -i "s|<base href=\"[^\"]*\"|<base href=\"$base\"|" dist/wwwroot/index.html
+          grep -q "<base href=\"$base\"" dist/wwwroot/index.html
 
       - name: Add Pages support files
         run: |
           touch dist/wwwroot/.nojekyll
           cp dist/wwwroot/index.html dist/wwwroot/404.html
 
-      - uses: actions/upload-artifact@v7
-        with:
-          name: site
-          path: dist/wwwroot
-          include-hidden-files: true
-
       - name: Upload Pages artifact
-        if: vars.ENABLE_PAGES == 'true'
         uses: actions/upload-pages-artifact@v5
         with:
           path: dist/wwwroot
 
-  # Runs only once Pages is enabled and the ENABLE_PAGES repository variable is set to
-  # 'true'. Pages on a private repository requires a paid GitHub plan.
   deploy:
     needs: build
-    if: vars.ENABLE_PAGES == 'true'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
