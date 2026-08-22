@@ -44,6 +44,21 @@ dotnet publish -c Release -o dist   # static output in dist/wwwroot
 
 The published output is plain static files — any web server or object store will host it.
 
+### In the GitHub Copilot app
+
+`.github/github-app.yml` configures the project for the GitHub Copilot app. It restores
+packages when a session is created, and offers **Run**, **Build** and **Publish** scripts.
+**Run** serves the app on <http://localhost:5279> and the app opens it in its integrated
+browser.
+
+That script passes `--no-launch-profile`, so `Properties/launchSettings.json` doesn't open a
+second browser window on top of it; `--urls` keeps the port the same as the launch profile.
+The hosting environment is still `Development`, because the WebAssembly dev server defaults
+to it.
+
+The app will ask you to review and accept the configuration before running anything from it,
+and will ask again each time the file changes.
+
 ## What is fixed and what is typed in
 
 Company and event facts are compiled into `Models/EventFacts.cs` and are **not** editable in
