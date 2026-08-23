@@ -283,7 +283,24 @@
         statusKind = kind;
     }
 
-    private async Task DownloadRequestAsync()
+    /// <summary>
+    /// Runs a step that talks to the browser. An exception escaping an event handler tears
+    /// the whole Blazor app down until the page is reloaded, which would throw away the
+    /// passport details just typed in. Failures are reported instead.
+    /// </summary>
+    private async Task Guard(Func<Task> step)
+    {
+        try
+        {
+            await step();
+        }
+        catch (JSException ex)
+        {
+            Report($"The browser could not complete that: {ex.Message}", "bad");
+        }
+    }
+
+    private Task DownloadRequestAsync() => Guard(async () =>
     {
         if (!Ready())
         {
@@ -292,9 +309,9 @@
 
         await Files.DownloadJsonAsync(data.RequestFileName(), LetterRequestFile.Write(data));
         Report($"Request file saved. Attach it to an email to {EventFacts.Email} — do not paste it into the message body.");
-    }
+    });
 
-    private async Task DownloadMarkdownAsync()
+    private Task DownloadMarkdownAsync() => Guard(async () =>
     {
         if (!Ready())
         {
@@ -302,9 +319,9 @@
         }
 
         Report(await Output.DownloadMarkdownAsync(data, Issue));
-    }
+    });
 
-    private async Task DownloadPdfAsync()
+    private Task DownloadPdfAsync() => Guard(async () =>
     {
         if (!Ready())
         {
@@ -313,20 +330,24 @@
 
         Report("Building the PDF…");
         Report(await Output.DownloadPdfAsync(data, Issue));
-    }
+    });
 
-    private async Task PreviewPdfAsync()
+    private Task PreviewPdfAsync() => Guard(async () =>
     {
-        await Output.OpenPdfAsync(data, previewLanguage, Issue);
-        Report("Draft opened in a new tab. Any unfilled field shows as {{PLACEHOLDER}}.");
-    }
+        var opened = await Output.OpenPdfAsync(data, previewLanguage, Issue);
+        Report(
+            opened
+                ? "Draft opened in a new tab. Any unfilled field shows as {{PLACEHOLDER}}."
+                : "Your browser blocked the preview tab. Allow pop-ups for this site, or use Download draft PDF.",
+            opened ? "ok" : "bad");
+    });
 
-    private async Task CopyMarkdownAsync()
+    private Task CopyMarkdownAsync() => Guard(async () =>
     {
         var copied = await Files.CopyAsync(PreviewMarkdown);
         Report(copied ? "Markdown copied to the clipboard." : "The browser blocked clipboard access.",
             copied ? "ok" : "bad");
-    }
+    });
 
     private void Reset()
     {

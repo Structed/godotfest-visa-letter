@@ -20,8 +20,8 @@ public sealed class BrowserFiles(IJSRuntime js)
     public ValueTask DownloadZipAsync(string fileName, string base64) =>
         js.InvokeVoidAsync("visaLetter.downloadBase64", fileName, base64, "application/zip");
 
-    public ValueTask OpenPdfAsync(string docDefinitionJson) =>
-        js.InvokeVoidAsync("visaLetter.openPdf", docDefinitionJson);
+    public ValueTask<string> OpenPdfAsync(string docDefinitionJson) =>
+        js.InvokeAsync<string>("visaLetter.openPdf", docDefinitionJson);
 
     public ValueTask<bool> CopyAsync(string text) =>
         js.InvokeAsync<bool>("visaLetter.copyText", text);

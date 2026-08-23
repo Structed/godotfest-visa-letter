@@ -67,11 +67,12 @@ public sealed class LetterOutput(BrowserFiles files)
         return $"PDF saved as a zip ({entries.Count} files).";
     }
 
-    public async Task OpenPdfAsync(LetterData data, LetterLanguage language, LetterIssue issue)
+    /// <summary>Returns false when the browser blocked the preview tab.</summary>
+    public async Task<bool> OpenPdfAsync(LetterData data, LetterLanguage language, LetterIssue issue)
     {
         var json = PdfDocumentFactory.BuildJson(
             LetterComposer.Compose(data, language, issue), language, issue);
-        await files.OpenPdfAsync(json);
+        return await files.OpenPdfAsync(json) == "opened";
     }
 
     private static string ArchiveBaseName(LetterData data, LetterIssue issue) =>

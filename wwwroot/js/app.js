@@ -94,7 +94,38 @@ window.visaLetter = (() => {
     return {
         downloadPdf: (filename, json) => build(json).download(filename),
 
-        openPdf: (json) => build(json).open(),
+        // pdfmake's own .open() calls window.open() and throws when the browser blocks it.
+        // Blazor turns that into a JSException which, unhandled, takes the whole app down
+        // until the page is reloaded — losing the passport details the operator just typed.
+        // Opening the tab here instead makes a blocked popup an ordinary result the C# side
+        // can report. Browsers only allow window.open() while a user gesture is still being
+        // processed, and interop can land just outside that window, so this is not rare.
+        openPdf: (json) => new Promise((resolve, reject) => {
+            let win = null;
+
+            try {
+                win = window.open('', '_blank');
+            } catch {
+                win = null;
+            }
+
+            if (!win) {
+                resolve('blocked');
+                return;
+            }
+
+            try {
+                build(json).getBlob(blob => {
+                    const url = URL.createObjectURL(blob);
+                    win.location.href = url;
+                    setTimeout(() => URL.revokeObjectURL(url), 40000);
+                    resolve('opened');
+                });
+            } catch (err) {
+                win.close();
+                reject(err);
+            }
+        }),
 
         // Returns the PDF as base64 so C# can bundle several files into one archive.
         pdfBase64: (json) => new Promise((resolve, reject) => {

@@ -191,6 +191,23 @@
         statusKind = kind;
     }
 
+    /// <summary>
+    /// Runs a step that talks to the browser. An exception escaping an event handler tears
+    /// the whole Blazor app down until the page is reloaded, taking the loaded request with
+    /// it. Failures are reported instead.
+    /// </summary>
+    private async Task Guard(Func<Task> step)
+    {
+        try
+        {
+            await step();
+        }
+        catch (JSException ex)
+        {
+            Report($"The browser could not complete that: {ex.Message}", "bad");
+        }
+    }
+
     private void Apply(LetterRequestParse parse)
     {
         problems = parse.Problems;
@@ -214,7 +231,7 @@
 
     private void LoadPastedRequest() => Apply(LetterRequestFile.Read(pasted));
 
-    private async Task LoadSignatureAsync(InputFileChangeEventArgs e)
+    private Task LoadSignatureAsync(InputFileChangeEventArgs e) => Guard(async () =>
     {
         var file = e.File;
         var mime = file.ContentType;
@@ -242,14 +259,14 @@
         Report(remembered
             ? "Signature loaded and remembered in this browser."
             : "Signature loaded. This browser would not store it, so you will need to pick it again next time.");
-    }
+    });
 
-    private async Task ForgetSignatureAsync()
+    private Task ForgetSignatureAsync() => Guard(async () =>
     {
         await Files.ForgetSignatureAsync();
         signature = null;
         Report("Signature forgotten.");
-    }
+    });
 
     private void ClearRequest()
     {
@@ -259,7 +276,7 @@
         Report("Request cleared.");
     }
 
-    private async Task DownloadSignedAsync()
+    private Task DownloadSignedAsync() => Guard(async () =>
     {
         if (letter is null || signature is null)
         {
@@ -268,20 +285,24 @@
 
         Report("Building the signed PDF…");
         Report(await Output.DownloadPdfAsync(letter, SignedIssue));
-    }
+    });
 
-    private async Task PreviewSignedAsync()
+    private Task PreviewSignedAsync() => Guard(async () =>
     {
         if (letter is null || signature is null)
         {
             return;
         }
 
-        await Output.OpenPdfAsync(letter, PreviewLanguage, SignedIssue);
-        Report("Signed letter opened in a new tab.");
-    }
+        var opened = await Output.OpenPdfAsync(letter, PreviewLanguage, SignedIssue);
+        Report(
+            opened
+                ? "Signed letter opened in a new tab."
+                : "Your browser blocked the preview tab. Allow pop-ups for this site, or download the PDF instead.",
+            opened ? "ok" : "bad");
+    });
 
-    private async Task DownloadWetSignatureAsync()
+    private Task DownloadWetSignatureAsync() => Guard(async () =>
     {
         if (letter is null)
         {
@@ -290,9 +311,9 @@
 
         Report(await Output.DownloadPdfAsync(letter, LetterIssue.WetSignature)
             + " Print it, sign and stamp it, then scan at 300 dpi in colour.");
-    }
+    });
 
-    private async Task DownloadMarkdownAsync()
+    private Task DownloadMarkdownAsync() => Guard(async () =>
     {
         if (letter is null)
         {
@@ -301,7 +322,7 @@
 
         Report(await Output.DownloadMarkdownAsync(
             letter, signature is null ? LetterIssue.WetSignature : SignedIssue));
-    }
+    });
 
     private static IEnumerable<(string Label, string Value)> Review(LetterData d)
     {
