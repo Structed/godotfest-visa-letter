@@ -3,6 +3,7 @@
 @using GodotFest.VisaLetter.Models
 @using GodotFest.VisaLetter.Services
 @inject BrowserFiles Files
+@inject LetterOutput Output
 
 <PageTitle>GodotFest — Visa Invitation Letter</PageTitle>
 
@@ -10,8 +11,9 @@
     <div>
         <h1>Visa Invitation Letter</h1>
         <p class="lede">
-            Generates the Schengen invitation letter for a <strong>GodotFest 2026</strong> attendee,
-            as Markdown and as a print-ready PDF.
+            Prepares the Schengen invitation letter for a <strong>GodotFest 2026</strong> attendee.
+            Fill this in, check the draft, then send us the request file so we can issue and sign
+            the letter.
         </p>
     </div>
     <div class="privacy" role="note">
@@ -186,9 +188,10 @@
             </fieldset>
 
             <div class="actions">
-                <button type="button" class="btn primary" @onclick="DownloadPdfAsync">Download PDF</button>
-                <button type="button" class="btn outline" @onclick="DownloadMarkdownAsync">Download Markdown</button>
-                <button type="button" class="btn outline" @onclick="PreviewPdfAsync">Open PDF preview</button>
+                <button type="button" class="btn primary" @onclick="DownloadRequestAsync">Download request file</button>
+                <button type="button" class="btn outline" @onclick="DownloadPdfAsync">Download draft PDF</button>
+                <button type="button" class="btn outline" @onclick="PreviewPdfAsync">Open draft preview</button>
+                <button type="button" class="btn ghost" @onclick="DownloadMarkdownAsync">Download Markdown</button>
                 <button type="button" class="btn ghost" @onclick="CopyMarkdownAsync">Copy Markdown</button>
                 <button type="button" class="btn ghost danger" @onclick="Reset">Clear form</button>
             </div>
@@ -198,11 +201,26 @@
                 <p class="status @statusKind">@status</p>
             }
 
+            <ol class="footnote steps">
+                <li>
+                    Check the draft. Every fact must match your passport and your ticket exactly.
+                </li>
+                <li>
+                    <strong>Download the request file</strong> and email it to
+                    <a href="mailto:@EventFacts.Email">@EventFacts.Email</a> as an attachment.
+                    It holds your passport number and address, so do not paste it into the message body.
+                </li>
+                <li>
+                    We re-generate the letter from that file, sign it, and send it back. The draft
+                    you download here is marked unsigned and cannot be submitted to a consulate.
+                </li>
+            </ol>
+
             <p class="footnote">
-                Print the PDF, have Senad sign and stamp it, then send it with the current
-                Handelsregister extract, the ticket confirmation, and a copy of the passport data page.
                 The letter states that the attendee bears all costs and is explicitly not a
-                Verpflichtungserklärung under §§ 66–68 AufenthG.
+                Verpflichtungserklärung under §§ 66–68 AufenthG. Some consulates ask for a printed
+                original with a handwritten signature and company stamp — tell us if yours does and
+                we will post one.
             </p>
         </section>
 
@@ -231,23 +249,21 @@
     private string status = string.Empty;
     private string statusKind = "ok";
 
+    // Everything this page produces is a review copy. The issued letter is composed again
+    // from the request file on /sign, so the wording is always ours rather than whatever an
+    // applicant might have edited into a document before emailing it in.
+    private static readonly LetterIssue Issue = LetterIssue.Draft;
+
     protected override void OnInitialized() => editContext = new EditContext(data);
 
     private string PreviewMarkdown =>
-        MarkdownRenderer.Render(LetterComposer.Compose(data, previewLanguage));
+        MarkdownRenderer.Render(LetterComposer.Compose(data, previewLanguage, Issue));
 
     private void SyncPreviewLanguage() => previewLanguage = data.Output switch
     {
         LetterOutputLanguage.German => LetterLanguage.German,
         LetterOutputLanguage.English => LetterLanguage.English,
         _ => previewLanguage
-    };
-
-    private LetterLanguage[] TargetLanguages => data.Output switch
-    {
-        LetterOutputLanguage.English => [LetterLanguage.English],
-        LetterOutputLanguage.German => [LetterLanguage.German],
-        _ => [LetterLanguage.English, LetterLanguage.German]
     };
 
     private bool Ready()
@@ -267,33 +283,45 @@
         statusKind = kind;
     }
 
-    private async Task DownloadMarkdownAsync()
+    /// <summary>
+    /// Runs a step that talks to the browser. An exception escaping an event handler tears
+    /// the whole Blazor app down until the page is reloaded, which would throw away the
+    /// passport details just typed in. Failures are reported instead.
+    /// </summary>
+    private async Task Guard(Func<Task> step)
+    {
+        try
+        {
+            await step();
+        }
+        catch (JSException ex)
+        {
+            Report($"The browser could not complete that: {ex.Message}", "bad");
+        }
+    }
+
+    private Task DownloadRequestAsync() => Guard(async () =>
     {
         if (!Ready())
         {
             return;
         }
 
-        var files = TargetLanguages
-            .Select(language => (
-                Name: $"{data.FileBaseName(language)}.md",
-                Content: System.Text.Encoding.UTF8.GetBytes(
-                    MarkdownRenderer.Render(LetterComposer.Compose(data, language)))))
-            .ToList();
+        await Files.DownloadJsonAsync(data.RequestFileName(), LetterRequestFile.Write(data));
+        Report($"Request file saved. Attach it to an email to {EventFacts.Email} — do not paste it into the message body.");
+    });
 
-        if (files.Count == 1)
+    private Task DownloadMarkdownAsync() => Guard(async () =>
+    {
+        if (!Ready())
         {
-            await Files.DownloadMarkdownAsync(
-                files[0].Name, System.Text.Encoding.UTF8.GetString(files[0].Content));
-            Report("Markdown saved.");
             return;
         }
 
-        await Files.DownloadZipAsync($"{ArchiveBaseName}-markdown.zip", ZipBuilder.ToBase64(files));
-        Report($"Markdown saved as a zip ({files.Count} files).");
-    }
+        Report(await Output.DownloadMarkdownAsync(data, Issue));
+    });
 
-    private async Task DownloadPdfAsync()
+    private Task DownloadPdfAsync() => Guard(async () =>
     {
         if (!Ready())
         {
@@ -301,44 +329,25 @@
         }
 
         Report("Building the PDF…");
+        Report(await Output.DownloadPdfAsync(data, Issue));
+    });
 
-        var languages = TargetLanguages;
-
-        if (languages.Length == 1)
-        {
-            var json = PdfDocumentFactory.BuildJson(
-                LetterComposer.Compose(data, languages[0]), languages[0]);
-            await Files.DownloadPdfAsync($"{data.FileBaseName(languages[0])}.pdf", json);
-            Report("PDF saved.");
-            return;
-        }
-
-        var files = new List<(string Name, byte[] Content)>();
-
-        foreach (var language in languages)
-        {
-            var json = PdfDocumentFactory.BuildJson(LetterComposer.Compose(data, language), language);
-            var base64 = await Files.PdfBase64Async(json);
-            files.Add(($"{data.FileBaseName(language)}.pdf", Convert.FromBase64String(base64)));
-        }
-
-        await Files.DownloadZipAsync($"{ArchiveBaseName}-pdf.zip", ZipBuilder.ToBase64(files));
-        Report($"PDF saved as a zip ({files.Count} files).");
-    }
-
-    private async Task PreviewPdfAsync()
+    private Task PreviewPdfAsync() => Guard(async () =>
     {
-        var json = PdfDocumentFactory.BuildJson(LetterComposer.Compose(data, previewLanguage), previewLanguage);
-        await Files.OpenPdfAsync(json);
-        Report("PDF opened in a new tab. Any unfilled field shows as {{PLACEHOLDER}}.");
-    }
+        var opened = await Output.OpenPdfAsync(data, previewLanguage, Issue);
+        Report(
+            opened
+                ? "Draft opened in a new tab. Any unfilled field shows as {{PLACEHOLDER}}."
+                : "Your browser blocked the preview tab. Allow pop-ups for this site, or use Download draft PDF.",
+            opened ? "ok" : "bad");
+    });
 
-    private async Task CopyMarkdownAsync()
+    private Task CopyMarkdownAsync() => Guard(async () =>
     {
         var copied = await Files.CopyAsync(PreviewMarkdown);
         Report(copied ? "Markdown copied to the clipboard." : "The browser blocked clipboard access.",
             copied ? "ok" : "bad");
-    }
+    });
 
     private void Reset()
     {
@@ -351,6 +360,4 @@
         editContext = new EditContext(data);
         Report("Form cleared.");
     }
-
-    private string ArchiveBaseName => data.FileBaseName(LetterLanguage.English);
 }

@@ -19,9 +19,14 @@ public static class PdfDocumentFactory
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    public static string BuildJson(IReadOnlyList<LetterBlock> blocks, LetterLanguage language)
+    public static string BuildJson(
+        IReadOnlyList<LetterBlock> blocks,
+        LetterLanguage language,
+        LetterIssue? issue = null)
     {
+        issue ??= LetterIssue.WetSignature;
         var content = new List<object>();
+        string? watermark = null;
 
         foreach (var block in blocks)
         {
@@ -120,6 +125,28 @@ public static class PdfDocumentFactory
                     });
                     break;
 
+                case SignatureImageBlock s:
+                    content.Add(new Dictionary<string, object>
+                    {
+                        ["image"] = s.PngDataUrl,
+                        ["width"] = s.WidthPt,
+                        ["margin"] = new[] { 0, 6, 0, 2 }
+                    });
+                    break;
+
+                case DraftMarkBlock d:
+                    watermark = d.Label;
+                    content.Add(new Dictionary<string, object>
+                    {
+                        ["text"] = new List<object>
+                        {
+                            Run($"{d.Label}\n", true),
+                            new Dictionary<string, object> { ["text"] = d.Note, ["bold"] = false, ["fontSize"] = 8 }
+                        },
+                        ["style"] = "draftMark"
+                    });
+                    break;
+
                 case NoteBlock n:
                     content.Add(Node(n.Text, "note"));
                     break;
@@ -147,9 +174,24 @@ public static class PdfDocumentFactory
             // Consumed by the JS layer, which turns it into pdfmake's footer callback.
             ["footerLabel"] = language == LetterLanguage.German ? "Seite" : "Page",
             ["footerOf"] = language == LetterLanguage.German ? "von" : "of",
+            // Also consumed by the JS layer: it attaches a random owner password and the
+            // permission flags there, so the password never exists on the C# side at all.
+            ["restrictEditing"] = issue.IsSigned,
             ["content"] = content,
             ["styles"] = Styles()
         };
+
+        if (watermark is not null)
+        {
+            doc["watermark"] = new Dictionary<string, object>
+            {
+                ["text"] = watermark,
+                ["color"] = "#b3261e",
+                ["opacity"] = 0.12,
+                ["bold"] = true,
+                ["angle"] = -45
+            };
+        }
 
         return JsonSerializer.Serialize(doc, Json);
     }
@@ -203,6 +245,13 @@ public static class PdfDocumentFactory
             ["bold"] = true,
             ["fontSize"] = 9,
             ["color"] = "#2b5f8c"
+        },
+        ["draftMark"] = new Dictionary<string, object>
+        {
+            ["fontSize"] = 12,
+            ["color"] = "#b3261e",
+            ["alignment"] = "center",
+            ["margin"] = new[] { 0, 0, 0, 14 }
         }
     };
 

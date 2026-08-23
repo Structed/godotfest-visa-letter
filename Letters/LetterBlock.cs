@@ -30,4 +30,17 @@ public sealed record GapBlock : LetterBlock;
 
 public sealed record SignatureLineBlock : LetterBlock;
 
+/// <summary>
+/// An embedded signature image, used in place of the blank signature line when the letter is
+/// issued signed. <paramref name="Caption"/> is what the Markdown writer emits instead: a
+/// multi-megabyte base64 data URL inline in a .md file would be useless to a reader.
+/// </summary>
+public sealed record SignatureImageBlock(string PngDataUrl, double WidthPt, string Caption) : LetterBlock;
+
+/// <summary>
+/// Marks an unsigned review copy, so a draft the attendee generated for themselves cannot be
+/// mistaken for — or submitted as — an issued letter.
+/// </summary>
+public sealed record DraftMarkBlock(string Label, string Note) : LetterBlock;
+
 public sealed record NoteBlock(string Text) : LetterBlock;
