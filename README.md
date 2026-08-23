@@ -3,6 +3,8 @@
 A static Blazor WebAssembly tool that produces the Schengen visa invitation letter for a
 **GodotFest 2026** attendee, in English and German, as Markdown and as a print-ready PDF.
 
+**Live tool: <https://structed.github.io/godotfest-visa-letter/>**
+
 Attendees travelling from visa-required countries need a formal invitation from the
 organising company to submit with their Schengen application (Type C, business/conference).
 This replaces hand-editing the Word template for every request.
@@ -226,16 +228,28 @@ build with `InvariantGlobalization`.
 
 ## Deployment
 
-`.github/workflows/deploy.yml` publishes the app to GitHub Pages. It builds on every push to
-`main` and uploads the site as a build artifact; the deploy step only runs when the
-repository variable `ENABLE_PAGES` is set to `true`.
+`.github/workflows/deploy.yml` publishes the app to GitHub Pages on every push to `main`,
+which includes every merged pull request. The live site is:
 
-To turn deployment on: enable Pages (Settings → Pages → Source: GitHub Actions), then add
-the repository variable `ENABLE_PAGES=true`.
+<https://structed.github.io/godotfest-visa-letter/>
 
-Note that **GitHub Pages on a private repository requires a paid plan** (Pro, Team or
-Enterprise). On a free plan, either run the tool locally with `dotnet run` or host the
-published `dist/wwwroot` folder somewhere else.
+Pull requests targeting `main` run the same build without deploying, so a publish that would
+break the site is caught before it merges. Pages is configured with **Source: GitHub
+Actions** (Settings → Pages); nothing gates the deployment behind a repository variable.
 
-The workflow rewrites `<base href>` to the repository name, which is what a project Pages
-site needs.
+Three things have to be done to the published output for a project Pages site to work, and
+the workflow does all three:
+
+| Step | Why |
+| --- | --- |
+| Rewrite `<base href>` to `/godotfest-visa-letter/` | The site is served from a subpath, not the domain root. `wwwroot/index.html` keeps `<base href="/" />` so `dotnet run` still works locally. |
+| Write `.nojekyll` | Otherwise Jekyll strips `_framework/`, and the app cannot load its own runtime. |
+| Copy `index.html` to `404.html` | Lets deep links resolve to the SPA. |
+
+The base href rewrite is verified after it runs, because `sed` exits successfully when it
+matches nothing — an unnoticed miss would deploy a site that requests its framework files
+from the wrong path and never boots.
+
+Publishing the site changes nothing about how the tool handles data. The deployed output is
+the same static files, there is still no backend, and passport details still never leave the
+browser. A publicly reachable URL is not a data-handling concern here.
