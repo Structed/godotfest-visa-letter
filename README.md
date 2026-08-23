@@ -244,7 +244,7 @@ the workflow does all three:
 | --- | --- |
 | Rewrite `<base href>` to `/godotfest-visa-letter/` | The site is served from a subpath, not the domain root. `wwwroot/index.html` keeps `<base href="/" />` so `dotnet run` still works locally. |
 | Write `.nojekyll` | Otherwise Jekyll strips `_framework/`, and the app cannot load its own runtime. |
-| Copy `index.html` to `404.html` | Lets deep links resolve to the SPA. |
+| Copy `index.html` to `404.html` | Lets deep links resolve to the SPA. Without it, `/sign` returns a 404 instead of loading the office page. |
 
 The base href rewrite is verified after it runs, because `sed` exits successfully when it
 matches nothing — an unnoticed miss would deploy a site that requests its framework files
@@ -252,4 +252,12 @@ from the wrong path and never boots.
 
 Publishing the site changes nothing about how the tool handles data. The deployed output is
 the same static files, there is still no backend, and passport details still never leave the
-browser. A publicly reachable URL is not a data-handling concern here.
+browser.
+
+It does put the office page at `/sign` on the public internet, linked from the attendee form.
+That is not a leak: the signature image is never part of the deployed output, it only ever
+enters from the operator's own disk, and nobody who visits `/sign` gains a capability they
+did not already have with an image editor. What it does mean is that the office workflow is
+discoverable, and that an attendee who follows the link could issue themselves a letter that
+looks issued. If that matters, the answer is to drop the link and treat the URL as
+need-to-know, not to add an access check — there is no server to enforce one.
