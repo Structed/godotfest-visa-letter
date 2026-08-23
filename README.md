@@ -35,8 +35,8 @@ fills the form                             opens the .json request
    (`Invitation-Request-Ada-Lovelace-20260822.json`).
 2. They email it to `contact@godotfest.com` **as an attachment** — it holds a passport number
    and a home address, so it does not belong in a message body or a URL.
-3. The office opens `/sign`, loads the file, checks the details against Pretix and the passport
-   copy, and issues the letter.
+3. The office opens `/sign` — by typing the URL, as nothing links to it — loads the file, checks
+   the details against Pretix and the passport copy, and issues the letter.
 
 Delete the request file and the email it arrived in once the letter has gone out.
 
@@ -254,10 +254,14 @@ Publishing the site changes nothing about how the tool handles data. The deploye
 the same static files, there is still no backend, and passport details still never leave the
 browser.
 
-It does put the office page at `/sign` on the public internet, linked from the attendee form.
-That is not a leak: the signature image is never part of the deployed output, it only ever
-enters from the operator's own disk, and nobody who visits `/sign` gains a capability they
-did not already have with an image editor. What it does mean is that the office workflow is
-discoverable, and that an attendee who follows the link could issue themselves a letter that
-looks issued. If that matters, the answer is to drop the link and treat the URL as
-need-to-know, not to add an access check — there is no server to enforce one.
+It does put the office page at `/sign` on the public internet. That is not a leak: the
+signature image is never part of the deployed output, it only ever enters from the operator's
+own disk, and nobody who visits `/sign` gains a capability they did not already have with an
+image editor.
+
+Nothing in the attendee form links to it, deliberately, so an attendee cannot wander into the
+office tool and issue themselves a letter that looks issued. **Treat that as sign-posting, not
+as a control.** The route is compiled into the app that every visitor downloads, so anyone who
+looks will find it, and a static site has no server on which to enforce anything better. The
+protection that actually matters is that the signature image lives only on the operator's
+machine.
