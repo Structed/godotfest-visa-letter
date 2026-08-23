@@ -215,7 +215,7 @@
         Report(parse.Message, parse.Ok ? "ok" : "bad");
     }
 
-    private async Task LoadRequestFileAsync(InputFileChangeEventArgs e)
+    private Task LoadRequestFileAsync(InputFileChangeEventArgs e) => Guard(async () =>
     {
         try
         {
@@ -227,7 +227,7 @@
             Apply(LetterRequestParse.Failed(
                 $"That file is larger than {MaxRequestBytes / 1024} KB, so it is not a request file."));
         }
-    }
+    });
 
     private void LoadPastedRequest() => Apply(LetterRequestFile.Read(pasted));
 
