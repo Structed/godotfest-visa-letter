@@ -74,10 +74,24 @@ public static class MarkdownRenderer
                     sb.AppendLine();
                     break;
 
+                case DraftMarkBlock d:
+                    sb.AppendLine($"> **{d.Label}**");
+                    sb.AppendLine(">");
+                    sb.AppendLine($"> {d.Note}");
+                    sb.AppendLine();
+                    break;
+
                 // Deliberately no trailing blank line: the signature name block sits
                 // directly underneath the rule in the source templates.
                 case SignatureLineBlock:
                     sb.AppendLine("_______________________________________");
+                    break;
+
+                // The image itself is a data URL hundreds of kilobytes long, which would be
+                // useless inline in a .md file, so the Markdown carries the caption instead.
+                case SignatureImageBlock s:
+                    sb.AppendLine($"*[{s.Caption}]*");
+                    sb.AppendLine();
                     break;
 
                 case NoteBlock n:

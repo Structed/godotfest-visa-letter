@@ -6,7 +6,10 @@ namespace GodotFest.VisaLetter.Services;
 public sealed class BrowserFiles(IJSRuntime js)
 {
     public ValueTask DownloadMarkdownAsync(string fileName, string markdown) =>
-        js.InvokeVoidAsync("visaLetter.downloadText", fileName, markdown);
+        js.InvokeVoidAsync("visaLetter.downloadText", fileName, markdown, "text/markdown;charset=utf-8");
+
+    public ValueTask DownloadJsonAsync(string fileName, string json) =>
+        js.InvokeVoidAsync("visaLetter.downloadText", fileName, json, "application/json;charset=utf-8");
 
     public ValueTask DownloadPdfAsync(string fileName, string docDefinitionJson) =>
         js.InvokeVoidAsync("visaLetter.downloadPdf", fileName, docDefinitionJson);
@@ -22,4 +25,13 @@ public sealed class BrowserFiles(IJSRuntime js)
 
     public ValueTask<bool> CopyAsync(string text) =>
         js.InvokeAsync<bool>("visaLetter.copyText", text);
+
+    public ValueTask<bool> RememberSignatureAsync(string dataUrl) =>
+        js.InvokeAsync<bool>("visaLetter.rememberSignature", dataUrl);
+
+    public ValueTask<string?> RecallSignatureAsync() =>
+        js.InvokeAsync<string?>("visaLetter.recallSignature");
+
+    public ValueTask ForgetSignatureAsync() =>
+        js.InvokeVoidAsync("visaLetter.forgetSignature");
 }

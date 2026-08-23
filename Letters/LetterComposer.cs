@@ -10,8 +10,14 @@ namespace GodotFest.VisaLetter.Letters;
 /// </summary>
 public static class LetterComposer
 {
-    public static IReadOnlyList<LetterBlock> Compose(LetterData data, LetterLanguage language) =>
-        language == LetterLanguage.German ? ComposeGerman(data) : ComposeEnglish(data);
+    public static IReadOnlyList<LetterBlock> Compose(
+        LetterData data,
+        LetterLanguage language,
+        LetterIssue? issue = null)
+    {
+        issue ??= LetterIssue.WetSignature;
+        return language == LetterLanguage.German ? ComposeGerman(data, issue) : ComposeEnglish(data, issue);
+    }
 
     /// <summary>Empty fields fall back to the same {{PLACEHOLDER}} markers the Word templates use.</summary>
     private static string F(string value, string placeholder) =>
@@ -47,7 +53,70 @@ public static class LetterComposer
             : $"{startDay} {start.Day} and {endDay} {monthYear}";
     }
 
-    private static List<LetterBlock> ComposeEnglish(LetterData d)
+    /// <summary>
+    /// The banner on an attendee's review copy. Emitted first so it is the first thing on the
+    /// page, and turned into a page watermark as well by the PDF writer.
+    /// </summary>
+    private static IEnumerable<LetterBlock> DraftMark(LetterIssue issue, LetterLanguage language)
+    {
+        if (issue.State != LetterIssueState.Draft)
+        {
+            yield break;
+        }
+
+        yield return language == LetterLanguage.German
+            ? new DraftMarkBlock(
+                "ENTWURF — NICHT UNTERSCHRIEBEN",
+                "Vorschau zur Prüfung der Angaben. Dies ist kein ausgestelltes Einladungsschreiben und " +
+                $"nicht zur Vorlage bei einer Auslandsvertretung geeignet. Senden Sie die Anfragedatei an {EventFacts.Email}.")
+            : new DraftMarkBlock(
+                "DRAFT — UNSIGNED",
+                "A preview for checking the details. This is not an issued invitation letter and must not " +
+                $"be submitted to a consulate. Send the request file to {EventFacts.Email} to have it issued.");
+    }
+
+    /// <summary>
+    /// The closing signature area. A draft and a print-and-wet-sign copy both leave a blank
+    /// line for a handwritten signature; a signed letter carries the image instead.
+    /// </summary>
+    private static IEnumerable<LetterBlock> SignatureArea(LetterIssue issue, LetterLanguage language)
+    {
+        var german = language == LetterLanguage.German;
+        var role = german ? "Geschäftsführer" : "Geschäftsführer (Managing Director)";
+
+        if (issue.IsSigned)
+        {
+            yield return new SignatureImageBlock(
+                issue.SignaturePng!,
+                150,
+                german ? $"Unterschrieben: {EventFacts.Director}" : $"Signed: {EventFacts.Director}");
+        }
+        else
+        {
+            yield return new GapBlock();
+            yield return new GapBlock();
+            yield return new SignatureLineBlock();
+        }
+
+        yield return new LinesBlock(
+        [
+            $"**{EventFacts.Director}**",
+            role,
+            EventFacts.CompanyName
+        ]);
+
+        // The signed wording states how the document was executed and points to the printed
+        // original, because several Schengen posts still ask to see one.
+        yield return issue.IsSigned
+            ? new NoteBlock(german
+                ? "Elektronisch ausgestellt und unterschrieben. Ein gedrucktes Original mit handschriftlicher " +
+                  $"Unterschrift und Firmenstempel ist auf Anfrage unter {EventFacts.Email} erhältlich."
+                : "Issued and signed electronically. A printed original bearing a handwritten signature and " +
+                  $"the company stamp is available on request from {EventFacts.Email}.")
+            : new NoteBlock(german ? "(Unterschrift und Firmenstempel)" : "(signature and company stamp)");
+    }
+
+    private static List<LetterBlock> ComposeEnglish(LetterData d, LetterIssue issue)
     {
         const LetterLanguage lang = LetterLanguage.English;
 
@@ -63,6 +132,7 @@ public static class LetterComposer
 
         return
         [
+            .. DraftMark(issue, lang),
             new HeadingBlock(1, EventFacts.CompanyName),
             new LinesBlock(
             [
@@ -194,16 +264,7 @@ public static class LetterComposer
                 "Should you require any further information or documentation in support of this application, " +
                 $"please contact us at {EventFacts.Email}. We are glad to answer any questions your office may have."),
             new ParagraphBlock("Yours faithfully,"),
-            new GapBlock(),
-            new GapBlock(),
-            new SignatureLineBlock(),
-            new LinesBlock(
-            [
-                $"**{EventFacts.Director}**",
-                "Geschäftsführer (Managing Director)",
-                EventFacts.CompanyName
-            ]),
-            new NoteBlock("(signature and company stamp)"),
+            .. SignatureArea(issue, lang),
             new RuleBlock(),
             new HeadingBlock(3, "Enclosures"),
             new OrderedBlock(
@@ -215,7 +276,7 @@ public static class LetterComposer
         ];
     }
 
-    private static List<LetterBlock> ComposeGerman(LetterData d)
+    private static List<LetterBlock> ComposeGerman(LetterData d, LetterIssue issue)
     {
         const LetterLanguage lang = LetterLanguage.German;
 
@@ -230,6 +291,7 @@ public static class LetterComposer
 
         return
         [
+            .. DraftMark(issue, lang),
             new HeadingBlock(1, EventFacts.CompanyName),
             new LinesBlock(
             [
@@ -361,16 +423,7 @@ public static class LetterComposer
             new ParagraphBlock(
                 $"Für Rückfragen oder weitere Unterlagen stehen wir Ihnen unter {EventFacts.Email} gerne zur Verfügung."),
             new ParagraphBlock("Mit freundlichen Grüßen"),
-            new GapBlock(),
-            new GapBlock(),
-            new SignatureLineBlock(),
-            new LinesBlock(
-            [
-                $"**{EventFacts.Director}**",
-                "Geschäftsführer",
-                EventFacts.CompanyName
-            ]),
-            new NoteBlock("(Unterschrift und Firmenstempel)"),
+            .. SignatureArea(issue, lang),
             new RuleBlock(),
             new HeadingBlock(3, "Anlagen"),
             new OrderedBlock(

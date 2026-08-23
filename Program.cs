@@ -8,5 +8,6 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddScoped<BrowserFiles>();
+builder.Services.AddScoped<LetterOutput>();
 
 await builder.Build().RunAsync();
