@@ -226,6 +226,21 @@ Month names are hardcoded in `LetterDates` instead of using `CultureInfo`, so th
 identical regardless of which ICU data the WebAssembly runtime ships. This also lets the app
 build with `InvariantGlobalization`.
 
+## Branding and link previews
+
+`wwwroot\favicon.png` is copied from the
+[official GodotFest favicon](https://godotfest.com/favicon-32x32.png).
+`wwwroot\images\godotfest-logo.svg` contains the vector logo from the
+[GodotFest website](https://godotfest.com/), and `wwwroot\images\social-card.png` is the
+1200 x 630 visa-letter preview rendered from it. All three are bundled static assets:
+the app does not fetch artwork from another site or generate social images at runtime.
+
+Open Graph and Twitter large-image metadata live directly in `wwwroot\index.html`,
+so link-preview crawlers do not need to run WebAssembly. The canonical link, `og:url`,
+`og:image`, and `twitter:image` use absolute URLs beneath
+`https://structed.github.io/godotfest-visa-letter/`; update them together if the hosting
+address changes. The favicon stays relative to the base href so it also works locally.
+
 ## Deployment
 
 `.github/workflows/deploy.yml` publishes the app to GitHub Pages on every push to `main`,
